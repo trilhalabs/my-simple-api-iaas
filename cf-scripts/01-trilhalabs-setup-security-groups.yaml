@@ -1,0 +1,92 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Description: Script para criacao dos Security groups relacionados
+  a VPC gerada no setup em dev (padrão) ou prod
+
+Parameters:
+  EnvType:
+    Description: Tipo do Ambiente
+    Default: dev
+    Type: String
+    AllowedValues:
+      - prod
+      - dev
+    ConstraintDescription: especifique o ambiente dev ou prod
+
+  EnvironmentName:
+    Description: O nome do ambiente prefixado nos nomes dos recursos gerados
+    Type: String
+    Default: trilhalabs-myapi
+
+#  VpcID:
+#    Description: Opcao de escolha do ID da VCP a ser usado. Por default, eh apresentada a VPC de Dev
+#    Type: String
+#    Default: vpc-0b9b15e4b5c6c9b87
+#    AllowedValues:
+#      - vpc-xxx
+#      - vpc-0b9b15e4b5c6c9b87
+#    ConstraintDescription: especifique a VPC correspondente ao ambiente
+
+  SSHLocation:
+    Description: Range de Endereco IP a ser usado para acesso SSH a uma instacia EC2
+    Type: String
+    MinLength: 9
+    MaxLength: 18
+    Default: 0.0.0.0/0
+    AllowedPattern: (\d{1,3})\.(\d{1,3})\.(\d{1,3})\.(\d{1,3})/(\d{1,2})
+    ConstraintDescription: deve ser um range de IP valido no formato x.x.x.x/x.
+
+#Conditions:
+  #Criacao de recursos especificos para ambiente de prod
+#  EnvTypeProduction: !Equals [ !Ref EnvType, prod ]
+
+Resources:
+  InstanceSecurityGroupSSH:
+    Type: AWS::EC2::SecurityGroup
+    Properties:
+      GroupDescription: Habilita acesso SSH via porta 22
+      #VpcId: !If [EnvTypeProduction, vpz-xxx, vpc-0b9b15e4b5c6c9b87]
+      VpcId: 
+        Fn::ImportValue: !Sub ${EnvironmentName}-${EnvType}-VPC
+      SecurityGroupIngress:
+      - IpProtocol: tcp
+        FromPort: 22
+        ToPort: 22
+        CidrIp: !Ref SSHLocation
+      Tags:
+        - Key: Name
+          Value: !Sub ${EnvironmentName}-${EnvType}-InstanceSecurityGroupSSH
+
+  InstanceSecurityGroupPING:
+    Type: AWS::EC2::SecurityGroup
+    Properties:
+      GroupDescription: Habilita executar ping na instancia - bom para testes de conectividade
+      #VpcId: !If [EnvTypeProduction, vpz-xxx, vpc-0b9b15e4b5c6c9b87]
+      VpcId: 
+        Fn::ImportValue: !Sub ${EnvironmentName}-${EnvType}-VPC
+      SecurityGroupEgress:
+      - IpProtocol: tcp
+        FromPort: 0
+        ToPort: 0
+        CidrIp: 0.0.0.0/0
+      SecurityGroupIngress:
+        - FromPort: 0
+          ToPort: 0
+          IpProtocol: "icmp"
+          Description: "Allow ICMP traffic"
+          CidrIp: 0.0.0.0/0
+      Tags:
+        - Key: Name
+          Value: !Sub ${EnvironmentName}-${EnvType}-InstanceSecurityGroupPING
+
+Outputs:
+  InstanceSecurityGroupSSH:
+    Description: Security Group SSH criado
+    Value: !Ref InstanceSecurityGroupSSH
+    Export:
+      Name: !Sub ${AWS::StackName}-${EnvType}-InstanceSecurityGroupSSH
+
+  InstanceSecurityGroupPING:
+    Description: SG para ping - teste de conectividade
+    Value: !Ref InstanceSecurityGroupPING
+    Export:
+      Name: !Sub ${AWS::StackName}-${EnvType}-InstanceSecurityGroupPING
